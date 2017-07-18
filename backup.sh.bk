@@ -1,0 +1,34 @@
+#!/bin/bash
+
+NOW=$(date +"%D %T")
+
+echo "$NOW - info: $1 is BACKUP" >> /var/log/keepalived.log
+
+# host (LB01) interface id
+IF_ID=eni-4c7cb821
+
+# private ip address assigned to host interface when MASTER
+PRI_IP=172.31.71.1
+PRI_IP_MASK=/20
+
+# util function to turn RESULT in OK if empty
+function evalRESULT() {
+        if [ -z "${RESULT}" ]; then
+                RESULT=OK
+        fi
+}
+
+# manually remove the ec2 assigned private ip from host network config
+echo "$NOW - exec: sudo ip addr del $PRI_IP$PRI_IP_MASK dev eth0" >> /var/log/keepalived.log
+RESULT=$(sudo ip addr del $PRI_IP$PRI_IP_MASK dev eth0 2>&1)
+
+evalRESULT RESULT
+echo "$NOW - info: $RESULT" >> /var/log/keepalived.log
+
+# unassign private ip from current host network interface
+echo "$NOW - exec: aws ec2 unassign-private-ip-addresses --network-interface-id $IF_ID --private-ip-addresses $PRI_IP" >> /var/log/keepalived.log
+RESULT=$(aws ec2 unassign-private-ip-addresses --network-interface-id $IF_ID --private-ip-addresses $PRI_IP 2>&1)
+
+evalRESULT RESULT
+echo "$NOW - info: $RESULT" >> /var/log/keepalived.log
+

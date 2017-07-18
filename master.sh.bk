@@ -1,0 +1,43 @@
+#!/bin/bash
+
+NOW=$(date +"%D %T")
+
+echo "$NOW - info: $1 is MASTER" >> /var/log/keepalived.log
+
+# interface id for which we want to associate the elastic ip: current host interface
+IF_ID=eni-4c7cb821
+
+# Elastic IP allocation Id for the IP we want to associate
+ALLOC_ID=eipalloc-97bf32fe
+
+# private ip address we want to assign instance interface when turning MASTER
+PRI_IP=172.31.71.1
+PRI_IP_MASK=/20
+
+# util function to turn RESULT in OK if empty
+function evalRESULT() {
+	if [ -z "${RESULT}" ]; then
+        	RESULT=OK
+	fi
+}
+
+# associate elastic ip with current host network interface
+echo "$NOW - exec: aws ec2 associate-address --network-interface-id $IF_ID --allocation-id $ALLOC_ID --allow-reassociation" >> /var/log/keepalived.log
+RESULT=$(aws ec2 associate-address --network-interface-id $IF_ID --allocation-id $ALLOC_ID --allow-reassociation --output text 2>&1)
+
+evalRESULT RESULT
+echo "$NOW - info: $RESULT" >> /var/log/keepalived.log
+
+# assign private ip to current host network interface
+echo "$NOW - exec: aws ec2 assign-private-ip-addresses --network-interface-id $IF_ID --private-ip-addresses $PRI_IP --allow-reassignment" >> /var/log/keepalived.log
+RESULT=$(aws ec2 assign-private-ip-addresses --network-interface-id $IF_ID --private-ip-addresses $PRI_IP --allow-reassignment 2>&1)
+
+evalRESULT RESULT
+echo "$NOW - info: $RESULT" >> /var/log/keepalived.log
+
+# manually add the ec2 assigned private ip to host network config
+echo "$NOW - exec: sudo ip addr add $PRI_IP$PRI_IP_MASK dev eth0" >> /var/log/keepalived.log
+RESULT=$(sudo ip addr add $PRI_IP$PRI_IP_MASK dev eth0 2>&1)
+
+evalRESULT RESULT
+echo "$NOW - info: $RESULT" >> /var/log/keepalived.log
